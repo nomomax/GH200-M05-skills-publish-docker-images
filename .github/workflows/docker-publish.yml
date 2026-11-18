@@ -24,10 +24,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 建置並推送 Docker 映像檔 (原生 Docker CLI)
+      # 關鍵修正：將可能含有大寫字母的帳號與儲存庫名稱轉換為全小寫，防止 Buildx 報錯
+      - name: 轉換儲存庫名稱為小寫
         run: |
-          # 注意：Docker 規範映像檔路徑必須全小寫
-          IMAGE_NAME="ghcr.io/${{ github.repository }}/stackoverflown:main"
-          IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
-          docker build . --tag "$IMAGE_NAME_LOWER"
-          docker push "$IMAGE_NAME_LOWER"
+          echo "IMAGE_REPOSITORY=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: 設定 QEMU 模擬器 (支援多架構建置)
+        uses: docker/setup-qemu-action@v3
+
+      - name: 設定 Docker Buildx 建置引擎
+        uses: docker/setup-buildx-action@v3
+
+      - name: 建置並推送多架構映像檔 (Buildx)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ env.IMAGE_REPOSITORY }}/stackoverflown:main
+            ghcr.io/${{ env.IMAGE_REPOSITORY }}/stackoverflown:${{ github.sha }}
